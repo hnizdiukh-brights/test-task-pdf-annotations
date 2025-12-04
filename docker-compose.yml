@@ -1,0 +1,8 @@
+services:
+  pdf-annotator:
+    build: .
+    container_name: pdf-annotator
+    working_dir: /usr/src/app
+    mem_limit: 256m
+    volumes:
+      - ./data:/usr/src/app/data
