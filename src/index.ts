@@ -1,23 +1,36 @@
 import { join } from 'path';
 import muhammara from 'muhammara';
-import type {
-  ProcessedComment,
-  Annotation,
-  PDFCoordinates,
-  RGBColor,
-} from './types.js';
+import type { ProcessedComment, Annotation, PDFCoordinates } from './types.js';
 import { COMMENTS } from './constants.js';
 
 const documentPath = join(process.cwd(), 'data', '500mb.pdf');
 const outputPath = join(process.cwd(), 'data', 'annotated-document.pdf');
 
 class PDFAnnotator {
-  hexToRGB(hex: string): RGBColor {
-    const cleanHex = hex.replace('#', '');
-    const r = parseInt(cleanHex.substring(0, 2), 16) / 255;
-    const g = parseInt(cleanHex.substring(2, 4), 16) / 255;
-    const b = parseInt(cleanHex.substring(4, 6), 16) / 255;
-    return { r, g, b };
+  drawEllipse(
+    recipe: any,
+    centerX: number,
+    centerY: number,
+    radiusX: number,
+    radiusY: number,
+    stroke: string,
+  ): void {
+    // Approximate ellipse using polygon with many points
+    const numPoints = 64;
+    const points: [number, number][] = [];
+
+    for (let i = 0; i <= numPoints; i++) {
+      const angle = (i / numPoints) * 2 * Math.PI;
+      const x = centerX + radiusX * Math.cos(angle);
+      const y = centerY + radiusY * Math.sin(angle);
+      points.push([x, y]);
+    }
+
+    recipe.polygon(points, {
+      stroke: stroke,
+      lineWidth: 2,
+      fill: false,
+    });
   }
 
   transformCoordinates(
@@ -43,9 +56,7 @@ class PDFAnnotator {
     const width = annotation.width * pageWidth;
     const height = annotation.height * pageHeight;
 
-    const pdfY = pageHeight - y - height;
-
-    return { x, y: pdfY, width, height };
+    return { x, y, width, height };
   }
 
   logMemory(label: string): void {
@@ -127,7 +138,6 @@ async function main(): Promise<void> {
 
         if (comment.parsedAnnotations && comment.parsedAnnotations.length > 0) {
           for (const annotation of comment.parsedAnnotations) {
-            const color = annotator.hexToRGB(annotation.stroke);
             const coords = annotator.transformCoordinates(
               annotation,
               pageWidth,
@@ -149,8 +159,8 @@ async function main(): Promise<void> {
                 break;
               }
 
-              case 'ellipse':
               case 'circle': {
+                console.log('Drawing circle with coords:', coords);
                 recipe.circle(
                   coords.x + coords.width / 2,
                   coords.y + coords.height / 2,
@@ -163,9 +173,26 @@ async function main(): Promise<void> {
                 break;
               }
 
+              case 'ellipse': {
+                const centerX = coords.x + coords.width / 2;
+                const centerY = coords.y + coords.height / 2;
+                const radiusX = coords.width / 2;
+                const radiusY = coords.height / 2;
+
+                annotator.drawEllipse(
+                  recipe,
+                  centerX,
+                  centerY,
+                  radiusX,
+                  radiusY,
+                  annotation.stroke,
+                );
+                break;
+              }
+
               case 'line': {
                 const centerX = annotation.left * pageWidth;
-                const centerY = pageHeight - annotation.top * pageHeight;
+                const centerY = annotation.top * pageHeight;
                 const x1 = centerX + annotation.x1! * pageWidth;
                 const y1 = centerY - annotation.y1! * pageHeight;
                 const x2 = centerX + annotation.x2! * pageWidth;
